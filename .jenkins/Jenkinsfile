@@ -54,7 +54,7 @@ pipeline {
                 script {
                     sh """
                     docker run --rm \
-                        -v $(pwd):/app \
+                        -v \$(pwd):/app \
                         osv-scanner:latest --update
                     """
                 }
