@@ -1,18 +1,92 @@
 pipeline {
     agent any
+
+    environment {
+        GITHUB_REPO = 'lamarcos/CNAM' // Remplace par ton dépôt
+        GITHUB_TOKEN = credentials('github-token') // Ton token GitHub
+        SONARQUBE_ENV = 'SonarQube' // Nom de la configuration SonarQube dans Jenkins
+    }
+
     stages {
-        stage('Initialisation') {
+        stage('Checkout Code') {
             steps {
-                echo 'Pipeline démarré. Aucun traitement pour le moment.'
+                checkout scm // Vérifie le code depuis le dépôt GitHub
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withSonarQubeEnv(SONARQUBE_ENV) {
+                        // Commande SonarQube CLI pour analyser le code
+                        sh """
+                        sonar-scanner \
+                          -Dsonar.projectKey=my_project_key \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=${SONAR_HOST_URL} \
+                          -Dsonar.login=${SONAR_AUTH_TOKEN}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    def qualityGate = waitForQualityGate()
+                    if (qualityGate.status != 'OK') {
+                        if (qualityGate.status == 'ERROR') {
+                            githubNotify('failure', 'Analyse échouée par SonarQube.')
+                            error 'SonarQube Quality Gate a échoué. Build arrêté.'
+                        } else {
+                            githubNotify('failure', 'Analyse OK mais anomalies détectées par SonarQube.')
+                            error 'SonarQube a détecté des anomalies. Build arrêté.'
+                        }
+                    } else {
+                        githubNotify('success', 'Analyse réussie par SonarQube.')
+                    }
+                }
+            }
+        }
+
+        stage('OSV-Scanner Analysis') {
+            steps {
+                script {
+                    sh """
+                    docker run --rm \
+                        -v $(pwd):/app \
+                        osv-scanner:latest --update
+                    """
+                }
             }
         }
     }
+
     post {
         success {
-            echo 'Pipeline terminé avec succès.'
+            script {
+                githubNotify('success', 'Pipeline terminé avec succès. Prêt pour validation manuelle.')
+            }
         }
         failure {
-            echo 'Pipeline échoué.'
+            script {
+                githubNotify('failure', 'Pipeline échoué. Vérification requise.')
+            }
         }
     }
+}
+
+def githubNotify(status, description) {
+    sh """
+    curl -X POST \
+        -H "Authorization: token ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        https://api.github.com/repos/${GITHUB_REPO}/statuses/${env.GIT_COMMIT} \
+        -d '{
+            "state": "${status}",
+            "description": "${description}",
+            "context": "CI/CD Pipeline"
+        }'
+    """
 }
