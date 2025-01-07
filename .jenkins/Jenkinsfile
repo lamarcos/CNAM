@@ -5,6 +5,8 @@ pipeline {
         GITHUB_REPO = 'lamarcos/CNAM' // Remplace par ton dépôt
         GITHUB_TOKEN = credentials('github-token') // Ton token GitHub
         SONARQUBE_ENV = 'SonarQube' // Nom de la configuration SonarQube dans Jenkins
+        SONAR_AUTH_TOKEN = credentials('Sonarqube-token') // Ton token SonarQube pour authentification
+        SONAR_HOST_URL = 'http://sonarqube:9000' // URL du serveur SonarQube
     }
 
     stages {
@@ -18,7 +20,7 @@ pipeline {
             steps {
                 script {
                     withSonarQubeEnv(SONARQUBE_ENV) {
-                        // Commande SonarQube CLI pour analyser le code
+                        // Commande pour analyser le code avec SonarQube
                         sh """
                         sonar-scanner \
                           -Dsonar.projectKey=my_project_key \
@@ -36,13 +38,8 @@ pipeline {
                 script {
                     def qualityGate = waitForQualityGate()
                     if (qualityGate.status != 'OK') {
-                        if (qualityGate.status == 'ERROR') {
-                            githubNotify('failure', 'Analyse échouée par SonarQube.')
-                            error 'SonarQube Quality Gate a échoué. Build arrêté.'
-                        } else {
-                            githubNotify('failure', 'Analyse OK mais anomalies détectées par SonarQube.')
-                            error 'SonarQube a détecté des anomalies. Build arrêté.'
-                        }
+                        githubNotify('failure', 'Analyse échouée par SonarQube.')
+                        error 'SonarQube Quality Gate a échoué. Build arrêté.'
                     } else {
                         githubNotify('success', 'Analyse réussie par SonarQube.')
                     }
