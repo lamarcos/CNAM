@@ -1,0 +1,18 @@
+pipeline {
+    agent any
+    stages {
+        stage('Initialisation') {
+            steps {
+                echo 'Pipeline démarré. Aucun traitement pour le moment.'
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Pipeline terminé avec succès.'
+        }
+        failure {
+            echo 'Pipeline échoué.'
+        }
+    }
+}
